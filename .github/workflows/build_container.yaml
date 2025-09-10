@@ -2,13 +2,10 @@ name: Build containers
 
 on:
   push:
-    branches: [ main ]
-    paths-ignore:
-      - 'README.md'
-  pull_request:
-    branches: [ main ]
-    paths-ignore:
-      - 'README.md'
+    branches:
+      - main
+    tags:
+      - '*'
   workflow_dispatch:
 
 env:
