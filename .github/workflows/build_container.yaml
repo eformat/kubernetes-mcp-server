@@ -14,7 +14,7 @@ on:
 env:
   REGISTRY: quay.io
   IMAGE_NAME: ${{ github.repository }}
-  TAG: ${{ github.ref_name == 'main' && 'latest' || github.ref_type == 'tag' && github.ref_name && startsWith(github.ref_name, 'v') && github.ref_name || 'unknown' }}
+  TAG: latest
   GO_VERSION: 1.23
 
 defaults:
