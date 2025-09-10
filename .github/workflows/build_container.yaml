@@ -35,10 +35,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
-      # - name: Get version
-      #   id: vars
-      #   run: echo "version=$(cat VERSION)" >> $GITHUB_OUTPUT
-
       - name: Build
         run: make build
 
@@ -50,7 +46,7 @@ jobs:
         uses: redhat-actions/buildah-build@v2
         with:
           image: ${{ env.IMAGE_NAME }}
-          tags: ${{ env.TAGS }}  # ${{ steps.vars.outputs.version }}
+          tags: ${{ env.TAGS }}
           containerfiles: |
             ./Dockerfile
 
@@ -68,7 +64,7 @@ jobs:
         uses: redhat-actions/push-to-registry@v2
         with:
           image: ${{ env.IMAGE_NAME }}
-          tags: ${{ env.TAGS }} ${{ steps.vars.outputs.version }}
+          tags: ${{ env.TAGS }}
           registry: ${{ env.REGISTRY }}
 
       # Provenance signing image
@@ -88,16 +84,5 @@ jobs:
             -a "ref=${{ github.sha }}" \
             -y \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.TAGS }}
-        env:
-          COSIGN_PASSWORD: ""
-
-      - name: Sign container image with VERSION
-        run: |
-          cosign sign --key cosign.key \
-            -a "repo=${{ github.repository }}" \
-            -a "workflow=${{ github.workflow }}" \
-            -a "ref=${{ github.sha }}" \
-            -y \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.vars.outputs.version }}
         env:
           COSIGN_PASSWORD: ""
