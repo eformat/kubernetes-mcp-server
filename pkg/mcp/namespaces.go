@@ -34,6 +34,24 @@ func (s *Server) initNamespaces() []server.ServerTool {
 			), Handler: s.projectsList,
 		})
 	}
+	ret = append(ret, server.ServerTool{
+		Tool: mcp.NewTool("namespace_create",
+			mcp.WithDescription("Create the Kubernetes namespace in the current cluster"),
+			mcp.WithString("namespace",
+				mcp.Required(),
+				mcp.Description("Name of the namespace to create"),
+			),
+		), Handler: s.namespaceCreate,
+	})
+	ret = append(ret, server.ServerTool{
+		Tool: mcp.NewTool("namespace_delete",
+			mcp.WithDescription("Delete the Kubernetes namespace in the current cluster"),
+			mcp.WithString("namespace",
+				mcp.Required(),
+				mcp.Description("Name of the namespace to delete"),
+			),
+		), Handler: s.namespaceDelete,
+	})
 	return ret
 }
 
@@ -60,3 +78,39 @@ func (s *Server) projectsList(ctx context.Context, _ mcp.CallToolRequest) (*mcp.
 	}
 	return NewTextResult(s.configuration.ListOutput.PrintObj(ret)), nil
 }
+
+func (s *Server) namespaceCreate(ctx context.Context, ctr mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	derived, err := s.k.Derived(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ns := ctr.GetArguments()["namespace"]
+	if ns == nil {
+		return NewTextResult("", fmt.Errorf("failed to create namespace missing a namespace name")), nil
+	}
+	ret, err := derived.NamespaceCreate(ctx, ns.(string))
+	if ret == nil {
+		return NewTextResult("", fmt.Errorf("failed to create namespace %s ", ns)), err
+	}
+	if err != nil {
+		return NewTextResult("", fmt.Errorf("failed to create namespace %s ", ns)), err
+	}
+	return NewTextResult(ns.(string), err), nil
+}
+
+func (s *Server) namespaceDelete(ctx context.Context, ctr mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	derived, err := s.k.Derived(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ns := ctr.GetArguments()["namespace"]
+	if ns == nil {
+		return NewTextResult("", fmt.Errorf("failed to delete namespace missing a namespace name")), nil
+	}
+	ret, err := derived.NamespaceDelete(ctx, ns.(string))
+	if err != nil {
+		return NewTextResult("", fmt.Errorf("failed to delete namespace %s ", ns)), err
+	}
+	return NewTextResult(ret, err), nil
+}
+
