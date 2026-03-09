@@ -62,13 +62,14 @@ func (c *Configuration) isToolApplicable(tool api.ServerTool) bool {
 }
 
 type Server struct {
-	mu             sync.RWMutex
-	configuration  *Configuration
-	server         *mcp.Server
-	enabledTools   []string
-	enabledPrompts []string
-	p              internalk8s.Provider
-	metrics        *metrics.Metrics // Metrics collection system
+	mu                 sync.RWMutex
+	configuration      *Configuration
+	server             *mcp.Server
+	enabledTools       []string
+	enabledServerTools []api.ServerTool
+	enabledPrompts     []string
+	p                  internalk8s.Provider
+	metrics            *metrics.Metrics // Metrics collection system
 }
 
 func NewServer(configuration Configuration, targetProvider internalk8s.Provider) (*Server, error) {
@@ -170,6 +171,7 @@ func (s *Server) reloadToolsets() error {
 	// Only hold write lock for the final assignment
 	s.mu.Lock()
 	s.enabledTools = newTools
+	s.enabledServerTools = applicableTools
 	s.enabledPrompts = newPrompts
 	s.mu.Unlock()
 
@@ -335,6 +337,13 @@ func (s *Server) GetEnabledTools() []string {
 	return s.enabledTools
 }
 
+// GetServerTools returns the currently enabled server tool definitions
+func (s *Server) GetServerTools() []api.ServerTool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.enabledServerTools
+}
+
 // GetEnabledPrompts returns the names of the currently enabled prompts
 func (s *Server) GetEnabledPrompts() []string {
 	s.mu.RLock()
@@ -367,6 +376,55 @@ func (s *Server) Close() {
 	if s.p != nil {
 		s.p.Close()
 	}
+}
+
+// CallTool invokes a registered tool by name with the given arguments.
+// This provides a direct REST-friendly way to call tools without the MCP JSON-RPC protocol.
+func (s *Server) CallTool(ctx context.Context, name string, arguments map[string]any) (*api.ToolCallResult, error) {
+	s.mu.RLock()
+	tools := s.enabledServerTools
+	s.mu.RUnlock()
+
+	var tool *api.ServerTool
+	for i := range tools {
+		if tools[i].Tool.Name == name {
+			tool = &tools[i]
+			break
+		}
+	}
+	if tool == nil {
+		return nil, fmt.Errorf("tool %q not found", name)
+	}
+
+	cluster := ""
+	if args, ok := arguments[s.p.GetTargetParameterName()]; ok {
+		if str, ok := args.(string); ok {
+			cluster = str
+		}
+	}
+	if cluster == "" {
+		cluster = s.p.GetDefaultTarget()
+	}
+	k, err := s.p.GetDerivedKubernetes(ctx, cluster)
+	if err != nil {
+		return nil, err
+	}
+
+	return tool.Handler(api.ToolHandlerParams{
+		Context:                ctx,
+		ExtendedConfigProvider: s.configuration,
+		KubernetesClient:       k,
+		ToolCallRequest:        &ToolCallRequest{Name: name, arguments: arguments},
+		ListOutput:             s.configuration.ListOutput(),
+		Elicitor:               &noopElicitor{},
+	})
+}
+
+// noopElicitor is used for REST API calls where MCP elicitation is not available.
+type noopElicitor struct{}
+
+func (n *noopElicitor) Elicit(_ context.Context, _ *api.ElicitParams) (*api.ElicitResult, error) {
+	return nil, ErrElicitationNotSupported
 }
 
 // Shutdown gracefully shuts down the server, flushing any pending metrics.

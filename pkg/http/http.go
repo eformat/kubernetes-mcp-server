@@ -129,6 +129,9 @@ func Serve(ctx context.Context, mcpServer *mcp.Server, staticConfig *config.Stat
 	})
 	mux.HandleFunc(statsEndpoint, statsHandler(mcpServer))
 	mux.Handle(metricsEndpoint, mcpServer.GetMetrics().PrometheusHandler())
+	mux.HandleFunc(openAPIEndpoint, openAPIHandler(mcpServer))
+	mux.HandleFunc(docsEndpoint, docsHandler())
+	mux.HandleFunc(toolsRESTEndpoint, toolsRESTHandler(mcpServer))
 	mux.Handle("/.well-known/", WellKnownHandler(staticConfig, httpClient))
 
 	ctx, cancel := context.WithCancel(ctx)
@@ -141,10 +144,10 @@ func Serve(ctx context.Context, mcpServer *mcp.Server, staticConfig *config.Stat
 	go func() {
 		var err error
 		if staticConfig.TLSCert != "" && staticConfig.TLSKey != "" {
-			klog.V(0).Infof("HTTPS server starting on port %s (endpoints: /mcp, /sse, /message, /healthz, /stats, /metrics)", staticConfig.Port)
+			klog.V(0).Infof("HTTPS server starting on port %s (endpoints: /mcp, /sse, /message, /healthz, /stats, /metrics, /docs, /openapi.json)", staticConfig.Port)
 			err = httpServer.ListenAndServeTLS(staticConfig.TLSCert, staticConfig.TLSKey)
 		} else {
-			klog.V(0).Infof("HTTP server starting on port %s (endpoints: /mcp, /sse, /message, /healthz, /stats, /metrics)", staticConfig.Port)
+			klog.V(0).Infof("HTTP server starting on port %s (endpoints: /mcp, /sse, /message, /healthz, /stats, /metrics, /docs, /openapi.json)", staticConfig.Port)
 			err = httpServer.ListenAndServe()
 		}
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
